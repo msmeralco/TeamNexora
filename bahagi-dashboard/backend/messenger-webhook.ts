@@ -7,8 +7,10 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
-const { VERIFY_TOKEN = '', APP_SECRET = '', PAGE_TOKEN = '' } = process.env
-const graph = `https://graph.facebook.com${process.env.GRAPH_VERSION ? '/' + process.env.GRAPH_VERSION : ''}`
+const VERIFY_TOKEN = 'bahagi-nexora-2026'; 
+const APP_SECRET = 'be7620e6346c18b2e8458fc2f41964aa'; 
+const PAGE_TOKEN = 'EAANFD4Rf0V8BS2TnWUDpahXIJP0ybzNgwZALRXMcUWCkzecMB8FreVtxmsZAPFI994enqKtargpTTIwPI8HvDUzbOhLr44ZBrfNKILBGOoa0oMPlBVVbbDeY9O9x2tevKbuH0puuzdCAf0npsmYAPySQST1ZAABbANku0GQmGMgZBMBQbFeinAw1ZCn82jJPEILndt89uZAwWQVZC0yQIMpL7AZDZD';
+const graph = `https://graph.facebook.com/v27.0`
 
 interface Attachment { type: string; payload: { url?: string; coordinates?: { lat: number; long: number } } }
 interface MsgEvent { sender: { id: string }; message?: { text?: string; attachments?: Attachment[] } }
@@ -24,15 +26,24 @@ interface StreetRef { id: string; name: string; barangayId: string; lat: number;
 
 // ---- TODO(NEXORA): wire these to your AWS services -------------------------------------------------
 /** Streets from your grid twin (same data as GET /regions, flattened). */
-async function listStreets(): Promise<StreetRef[]> { throw new Error('TODO: load streets') }
+async function listStreets(): Promise<StreetRef[]> {
+  // DEMO: your three tabletop streets. Replace with the real list from your backend.
+  return [
+    { id: 'estero', name: 'Estero St.', barangayId: 'kapitolyo', lat: 14.5738, lng: 121.0584 },
+    { id: 'mabini', name: 'Mabini St.', barangayId: 'kapitolyo', lat: 14.5731, lng: 121.0575 },
+    { id: 'rizal', name: 'Rizal St.', barangayId: 'kapitolyo', lat: 14.5724, lng: 121.0566 },
+  ]
+}
 /** Messenger photo URLs expire: download the image and put it in S3, return the stored URL. */
 async function storePhoto(url: string): Promise<string> { return url }
 /** Bedrock vision call: depth in cm on the MMDA scale + confidence 0..1. Reject photos that are not floods. */
 async function scoreDepth(_photoUrl: string): Promise<{ estimatedCm: number; confidence: number; duplicate: boolean }> {
-  throw new Error('TODO: call Bedrock')
+  return { estimatedCm: 5, confidence: 0.9, duplicate: false } // DEMO value; replace with the Bedrock call
 }
 /** Insert into the reports table; shape matches the dashboard's Report type. */
-async function saveReport(_r: Record<string, unknown>): Promise<void> { throw new Error('TODO: save report') }
+async function saveReport(r: Record<string, unknown>): Promise<void> {
+  console.log('REPORT (demo: only logged, not saved)', JSON.stringify(r)) // replace with a DynamoDB write
+}
 /** Per-user "waiting for location" state. Lambda instances don't share memory, so use DynamoDB (TTL 15 min). */
 const pending = new Map<string, Draft>()
 // ------------------------------------------------------------------------------------------------
@@ -54,7 +65,7 @@ async function findStreet(loc?: { lat: number; long: number }, text?: string): P
 }
 
 async function send(psid: string, message: object) {
-  const res = await fetch(`${graph}/me/messages?access_token=${PAGE_TOKEN}`, {
+  const res = await fetch(`${graph}/1361897890350145/messages?access_token=${PAGE_TOKEN}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recipient: { id: psid }, messaging_type: 'RESPONSE', message }),
@@ -108,10 +119,17 @@ export const handler = async (e: HttpEvent) => {
       : { statusCode: 403, body: 'forbidden' }
   }
   const raw = e.isBase64Encoded ? Buffer.from(e.body ?? '', 'base64').toString() : e.body ?? ''
-  if (!validSignature(raw, e.headers['x-hub-signature-256'])) return { statusCode: 401, body: 'bad signature' }
+  if (!validSignature(raw, e.headers['x-hub-signature-256'])) {
+    console.warn('Rejected POST: bad signature. Check that APP_SECRET is the secret of the same Meta app.')
+    return { statusCode: 401, body: 'bad signature' }
+  }
   const body = JSON.parse(raw)
   if (body.object !== 'page') return { statusCode: 404, body: '' }
   for (const entry of body.entry ?? [])
-    for (const ev of entry.messaging ?? []) await handle(ev).catch((err) => console.error('handle failed', err))
+    for (const ev of entry.messaging ?? []) {
+      console.log('Message event from', ev.sender?.id, 'types:', (ev.message?.attachments ?? []).map((a: Attachment) => a.type).join(',') || (ev.message?.text ? 'text' : 'other'))
+      await handle(ev)
+        .catch((err) => console.error('handle failed', err))
+    }
   return { statusCode: 200, body: 'EVENT_RECEIVED' }
 }

@@ -1,0 +1,5 @@
+{
+  "estero": { "name": "Estero St.", "barangayId": "kapitolyo", "switchId": "S1", "lat": 14.5738, "lng": 121.0584 },
+  "mabini": { "name": "Mabini St.", "barangayId": "kapitolyo", "switchId": "S2", "lat": 14.5731, "lng": 121.0575 },
+  "rizal":  { "name": "Rizal St.",  "barangayId": "kapitolyo", "switchId": "S3", "lat": 14.5724, "lng": 121.0566 }
+}

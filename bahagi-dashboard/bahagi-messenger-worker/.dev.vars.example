@@ -1,0 +1,10 @@
+# Copy to .dev.vars for `npm run dev` (local only, never commit .dev.vars)
+VERIFY_TOKEN=pick-any-string
+APP_SECRET=
+PAGE_ACCESS_TOKEN=
+# The whole service-account JSON on one line (Firebase → Project settings → Service accounts → Generate new private key)
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-xxx@....iam.gserviceaccount.com"}
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_SERVICE_KEY=sb_secret_...
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=

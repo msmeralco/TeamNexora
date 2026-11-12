@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "bahagi-messenger" generated at 2026-11-12T18:51:47.064Z.

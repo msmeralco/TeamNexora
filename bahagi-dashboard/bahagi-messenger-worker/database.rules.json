@@ -1,0 +1,10 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "streets": { ".read": true },
+    "reports": { ".read": true, ".indexOn": ["ts", "streetId", "barangayId"] },
+    "botSessions": { ".read": false },
+    "imageHashes": { ".read": false }
+  }
+}

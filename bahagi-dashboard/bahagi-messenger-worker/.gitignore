@@ -1,5 +1,0 @@
-node_modules/
-.wrangler/
-.dev.vars
-*service-account*.json
-*-firebase-adminsdk-*.json

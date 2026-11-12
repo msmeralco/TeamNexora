@@ -1,12 +1,12 @@
 import L from 'leaflet'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Circle, CircleMarker, MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import OutageCard from './OutageCard'
 import { config } from '../config'
 import { levelFromCm, LEVEL_STYLE } from '../lib/level'
-import type { FlatStreet, Recommendation, SensorReading } from '../types'
+import type { FlatStreet, NoahHazard, Recommendation, SensorReading } from '../types'
 
-// Outage marker: black tile, orange crossed-out bolt, pulsing orange ring. Looks nothing like the round water-level dots.
+// Black tile, crossed-out bolt, and pulsing ring distinguish an outage from water-level dots.
 const outageIcon = L.divIcon({
   className: '',
   iconSize: [44, 44],
@@ -17,6 +17,19 @@ const outageIcon = L.divIcon({
       <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="#f26522" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/><path d="M3 3l18 18" stroke="#fff"/></svg>
     </span></div>`,
 })
+
+const NOAH_PERIODS: { key: keyof NoahHazard; label: string }[] = [
+  { key: 'y5', label: '5 years' },
+  { key: 'y25', label: '25 years' },
+  { key: 'y100', label: '100 years' },
+]
+
+const HAZARD_STYLE = {
+  none: { label: 'No/low hazard', color: '#9ca3af' },
+  low: { label: 'Low · 0.1–0.5 m', color: '#eab308' },
+  medium: { label: 'Medium · 0.5–1.5 m', color: '#f26522' },
+  high: { label: 'High · over 1.5 m', color: '#dc2626' },
+} as const
 
 function Fit({ points }: { points: [number, number][] }) {
   const map = useMap()
@@ -41,6 +54,7 @@ interface Props {
 }
 
 export default function MapView({ streets, readings, recs, now, outages, onDecide, onRestore }: Props) {
+  const [period, setPeriod] = useState<keyof NoahHazard>('y5')
   const points = streets.map((s) => [s.lat, s.lng] as [number, number])
   const poles = streets.flatMap((s) => s.poles.map((p) => ({ ...p, off: !!outages[s.id] })))
   const peakOf = (s: (typeof streets)[number]) => {
@@ -63,6 +77,19 @@ export default function MapView({ streets, readings, recs, now, outages, onDecid
               ? { color: '#141414', weight: 3, dashArray: '2 6', fillColor: '#141414', fillOpacity: 0.18 }
               : { color: '#f26522', weight: 2, dashArray: '6 6', fillOpacity: 0.06 }} />
         ))}
+        {streets.map((s) => {
+          const hazard = s.noah?.[period]
+          if (!s.noah) return null
+          const style = HAZARD_STYLE[hazard ?? 'none']
+          return (
+            <CircleMarker key={`noah-${s.id}`} center={[s.lat, s.lng]} radius={15}
+              pathOptions={{ color: '#fff', weight: 2, fillColor: style.color, fillOpacity: 0.9 }}>
+              <Tooltip>
+                {s.name} · NOAH {NOAH_PERIODS.find((p) => p.key === period)?.label}: {style.label}
+              </Tooltip>
+            </CircleMarker>
+          )
+        })}
         {poles.map((p) => {
           const r = readings[p.id]
           const online = !!r && now - r.ts < config.offlineAfterMs
@@ -85,6 +112,29 @@ export default function MapView({ streets, readings, recs, now, outages, onDecid
           )
         })}
       </MapContainer>
+
+      <div className="absolute left-4 top-4 z-[1000] w-72 rounded-lg bg-white p-3 shadow-lg">
+        <p className="mb-2 text-sm font-bold">UP NOAH flood hazard layer</p>
+        <div className="flex gap-1">
+          {NOAH_PERIODS.map(({ key, label }) => (
+            <button key={key} type="button" aria-pressed={period === key} onClick={() => setPeriod(key)}
+              className={`flex-1 rounded px-2 py-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-meralco ${
+                period === key ? 'bg-ink text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          {Object.values(HAZARD_STYLE).map(({ label, color }) => (
+            <span key={label} className="flex items-center gap-1 text-[11px] text-stone-600">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+              {label}
+            </span>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-stone-500">Street-level classes from UP NOAH. Streets without NOAH data are not shown.</p>
+      </div>
 
       <div className="absolute right-4 top-4 z-[1000] flex max-h-[calc(100%-2rem)] w-80 flex-col gap-3 overflow-y-auto">
         {streets.filter((s) => outages[s.id]).map((s) => (

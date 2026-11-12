@@ -1,0 +1,13 @@
+{
+  "name": "bahagi-firebase-bridge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env bridge.mjs"
+  },
+  "engines": { "node": ">=22.9" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "firebase-admin": "^14.5.1"
+  }
+}

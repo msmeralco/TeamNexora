@@ -1,5 +1,5 @@
 import { config } from '../config'
-import type { Recommendation, Region, Report } from '../types'
+import type { AlertFeed, Recommendation, Region, Report, SensorReading } from '../types'
 import { mockRecs, mockRegions, mockReports } from './mockData'
 
 /** What the backend reports after it sends the SMS alerts for an action. */
@@ -20,6 +20,9 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
  *  POST /recommendations/:id/reject
  *  POST /streets/:id/restore          → dispatcher restores a street: backend publishes {"switch":"S1","state":"close"}, then sends a second SMS: "power restored". Returns SmsResult
  *  GET  /iot/ws-url                   → { url } SigV4-presigned wss:// URL for IoT Core (short-lived, no keys in the browser)
+ *  GET  /sensors                      → [{ poleId, levelCm, online, ts }]  latest pole-box reading (VITE_SENSOR_SOURCE=poll)
+ *  GET  /alerts                       → AlertFeed  box errors, floods, approvals waiting, recent events
+ * The BAHAGI laptop backend (bahagi-backend, FastAPI) serves all of these under /api.
  * The browser NEVER publishes switch commands itself: a human approves, the backend acts.
  */
 export const api = {
@@ -31,4 +34,6 @@ export const api = {
   restore: (streetId: string) =>
     config.useMock ? Promise.resolve<SmsResult>({ smsSent: 12 }) : http<SmsResult>(`/streets/${streetId}/restore`, { method: 'POST' }),
   iotUrl: () => http<{ url: string }>('/iot/ws-url'),
+  sensors: () => http<(SensorReading & { online: boolean })[]>('/sensors'),
+  alerts: () => (config.useMock ? Promise.resolve<AlertFeed>({ active: [], recent: [], box: null }) : http<AlertFeed>('/alerts')),
 }

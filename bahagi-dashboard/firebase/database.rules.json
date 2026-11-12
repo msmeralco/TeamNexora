@@ -1,0 +1,49 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "regions":         { ".read": "auth != null" },
+    "power":           { ".read": "auth != null" },
+    "alerts":          { ".read": "auth != null" },
+    "status":          { ".read": "auth != null" },
+    "archive":         { ".read": "root.child('dispatchers').child(auth.uid).exists()" },
+
+    "reports": {
+      ".read": "auth != null",
+      ".indexOn": ["ts", "streetId"],
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.child('source').val() === 'web'",
+        ".validate": "newData.hasChildren(['source', 'note', 'barangayId', 'ts']) && newData.child('note').isString() && newData.child('note').val().length <= 2000"
+      }
+    },
+
+    "recommendations": {
+      ".read": "auth != null",
+      "$id": {
+        "status": {
+          ".write": "root.child('dispatchers').child(auth.uid).exists() && data.val() === 'pending' && (newData.val() === 'approved' || newData.val() === 'rejected')"
+        },
+        "decidedBy": { ".write": "root.child('dispatchers').child(auth.uid).exists() && newData.val() === auth.uid" },
+        "decidedAt": { ".write": "root.child('dispatchers').child(auth.uid).exists()" }
+      }
+    },
+
+    "commands": {
+      ".read": "root.child('dispatchers').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$id": {
+        ".write": "root.child('dispatchers').child(auth.uid).exists() && !data.exists() && newData.child('by').val() === auth.uid && newData.child('status').val() === 'queued'",
+        ".validate": "newData.child('type').val() === 'approve' || newData.child('type').val() === 'reject' || newData.child('type').val() === 'restore'"
+      }
+    },
+
+    "sensors": {
+      ".read": "auth != null",
+      "$pole": { ".write": "root.child('devices').child(auth.uid).exists()" }
+    },
+
+    "dispatchers": { "$uid": { ".read": "auth != null && auth.uid === $uid" } },
+    "devices":     { "$uid": { ".read": "auth != null && auth.uid === $uid" } }
+  }
+}

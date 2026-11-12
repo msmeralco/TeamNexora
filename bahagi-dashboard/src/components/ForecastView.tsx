@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import { config } from '../config'
 import { BAND_STYLE, fetchRain, rainBand, type RainStep } from '../lib/rain'
 import type { FlatStreet, Hazard } from '../types'
@@ -14,6 +15,20 @@ const PERIODS = [
   ['y25', '25-year', '4% chance each year'],
   ['y100', '100-year', '1% chance each year'],
 ] as const
+
+const RAIN_COLOR = { none: '#9ca3af', yellow: '#eab308', orange: '#f26522', red: '#dc2626' } as const
+
+function FitForecast({ points }: { points: [number, number][] }) {
+  const map = useMap()
+  const key = JSON.stringify(points)
+  useEffect(() => {
+    if (!points.length) return
+    if (points.length === 1) map.setView(points[0], 13)
+    else map.fitBounds(points, { padding: [40, 40], maxZoom: 15 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, key])
+  return null
+}
 
 export default function ForecastView({ streets }: { streets: FlatStreet[] }) {
   const lat = streets.length ? streets.reduce((a, s) => a + s.lat, 0) / streets.length : null
@@ -89,6 +104,32 @@ export default function ForecastView({ streets }: { streets: FlatStreet[] }) {
             <div className="mt-1 flex justify-between text-xs text-stone-500"><span>Now</span><span>+24 h</span><span>+48 h</span></div>
           </>
         )}
+      </section>
+
+      <section className="overflow-hidden rounded-lg bg-white shadow">
+        <div className="border-b border-stone-200 p-5">
+          <h2 className="font-black">Forecast area map</h2>
+          <p className="text-sm text-stone-500">OpenStreetMap · street markers show the selected forecast area; marker color shows its peak rain band.</p>
+        </div>
+        <div className="h-72">
+          <MapContainer center={[lat!, lng!]} zoom={13} className="h-full w-full [&_.leaflet-tile]:max-w-none">
+            <TileLayer
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              maxZoom={19}
+            />
+            <FitForecast points={streets.map((street) => [street.lat, street.lng] as [number, number])} />
+            {streets.map((street) => (
+              <CircleMarker key={street.id} center={[street.lat, street.lng]} radius={9}
+                pathOptions={{ color: '#fff', weight: 2, fillColor: RAIN_COLOR[stats.band], fillOpacity: 0.9 }}>
+                <Tooltip>{street.name} · selected-area rain forecast: {BAND_STYLE[stats.band].label}</Tooltip>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+        </div>
+        <p className="border-t border-stone-200 px-5 py-3 text-xs text-stone-500">
+          Rain data is forecast for the center of the selected area, not individually for each street.
+        </p>
       </section>
 
       <section className="overflow-x-auto rounded-lg bg-white shadow">

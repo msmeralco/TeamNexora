@@ -14,4 +14,5 @@
 - Approving a cut clears that street's reports from the Reports list (backend should archive them). Restoring power triggers a second SMS ("power restored"); both endpoints return `{ smsSent, smsFailed? }` and the dashboard shows the result.
 - Recommendations appear only for streets with at least one non-duplicate resident report.
 - Forecast page: rain from Open-Meteo (default, no key) or OpenWeatherMap (`VITE_RAIN_PROVIDER`, `VITE_OWM_KEY`); 5/25/100-year hazard comes from `street.noah` (extract it from the NOAH shapefiles in the backend).
+- Messenger bot: `backend/messenger-webhook.ts` is the Lambda webhook (Meta verification, signature check, photo → location → street → Bedrock → saved report → Messenger reply). Fill in the TODO functions. The dashboard polls `/reports` and `/recommendations` every 10 s in live mode and shows the bot link from `VITE_MESSENGER_PAGE`.
 - `src/config.ts`: flood-level thresholds (demo 1:10 scale or real MMDA scale).

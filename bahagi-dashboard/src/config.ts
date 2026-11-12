@@ -9,6 +9,8 @@ export const config = {
     env.VITE_SCALE === 'real'
       ? { gutter: 20, knee: 48, waist: 94 } // MMDA flood gauge (cm)
       : { gutter: 2, knee: 5, waist: 9 }, // 1:10 tabletop model
+  // Facebook Page username or ID of the BAHAGI Messenger bot (builds https://m.me/<page>)
+  messengerPage: (env.VITE_MESSENGER_PAGE as string) ?? '',
   offlineAfterMs: 15_000,
   // rain forecast: 'openmeteo' (no key) or 'openweathermap' (needs VITE_OWM_KEY; the key is visible in the browser, fine for a hackathon)
   rainProvider: (env.VITE_RAIN_PROVIDER as string) === 'openweathermap' ? 'openweathermap' : 'openmeteo',

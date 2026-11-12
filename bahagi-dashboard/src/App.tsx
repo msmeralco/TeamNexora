@@ -47,6 +47,15 @@ export default function App() {
     return connectRealtime(poleIds, (r) => setReadings((prev) => ({ ...prev, [r.poleId]: r })), setLink)
   }, [poleIds])
 
+  // Live mode: new Messenger reports and recommendations arrive via the backend, so refresh every 10 s
+  useEffect(() => {
+    if (config.useMock) return
+    const t = setInterval(() => {
+      Promise.all([api.reports(), api.recommendations()]).then(([b, c]) => { setReports(b); setRecs(c) }).catch(() => {})
+    }, 10_000)
+    return () => clearInterval(t)
+  }, [])
+
   useEffect(() => {
     if (!notice) return
     const t = setTimeout(() => setNotice(''), 7000)

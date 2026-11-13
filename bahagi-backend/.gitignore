@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+uploads/*
+!uploads/.gitkeep
+.pytest_cache/
+data/resolved_reports.json

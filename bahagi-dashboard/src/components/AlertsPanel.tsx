@@ -41,7 +41,7 @@ function Row({ a }: { a: Alert }) {
 }
 
 /** Live alerts from the BAHAGI backend: pole-box errors, floods, approvals waiting, and what happened recently. */
-export default function AlertsPanel({ feed, reachable, workerSeen, workerOnline }: { feed: AlertFeed | null; reachable: boolean; workerSeen: number | null; workerOnline: boolean }) {
+export default function AlertsPanel({ feed, reachable }: { feed: AlertFeed | null; reachable: boolean }) {
   const [showAll, setShowAll] = useState(false)
   const [showRecent, setShowRecent] = useState(false)
 
@@ -49,18 +49,12 @@ export default function AlertsPanel({ feed, reachable, workerSeen, workerOnline 
     return (
       <div role="alert" className="flex items-center gap-3 bg-red-600 px-6 py-2 text-sm text-white">
         <span className="rounded bg-white px-2 py-0.5 text-xs font-black uppercase tracking-wide text-red-700">Critical</span>
-        <p><b>Can’t reach the Firebase database.</b> Check this computer’s internet connection; the page reconnects and catches up by itself.</p>
+        <p><b>Can’t reach the BAHAGI backend.</b> Start it with START_BAHAGI.bat on the laptop, then this page reconnects by itself.</p>
       </div>
     )
   if (!feed) return null
 
-  // the backend bridge is what actually moves switches and sends SMS; if it is down, approvals only queue
-  const bridge: Alert[] = workerOnline ? [] : [{
-    id: 'bridge-offline', severity: 'critical', kind: 'bridge_offline', active: true, ts: Date.now(),
-    title: workerSeen ? `BAHAGI backend bridge offline (last seen ${ago(workerSeen)})` : 'BAHAGI backend bridge has not connected',
-    detail: 'Approvals and restores are saved and will run when it is back. Start it on the laptop: npm start in backend/firebase-bridge.',
-  }]
-  const active = [...bridge, ...feed.active]
+  const active = feed.active
   const shown = showAll ? active : active.slice(0, 3)
   const critical = active.filter((a) => a.severity === 'critical').length
 

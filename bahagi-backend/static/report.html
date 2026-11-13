@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BAHAGI · Report a flood</title>
+<style>
+  :root { --ink:#141414; --muted:#5e5e5e; --line:#e2ddd0; --bg:#fbf8f1; --accent:#e0362b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 26px; margin: 4px 0 2px; }
+  p.sub { color: var(--muted); margin: 0 0 18px; }
+  label { display:block; font-weight:600; margin: 16px 0 6px; }
+  select, input[type=text] { width:100%; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-size:16px; background:#fff; }
+  .levels { display:grid; grid-template-columns: repeat(5, 1fr); gap:6px; }
+  .levels input { display:none; }
+  .levels span { display:block; text-align:center; padding:10px 2px; border:1.5px solid var(--line); border-radius:10px; background:#fff; font-size:13px; }
+  .levels input:checked + span { border-color: var(--accent); background:#fdecea; font-weight:700; }
+  .photo { border:2px dashed var(--line); border-radius:12px; padding:16px; text-align:center; background:#fff; }
+  .photo img { max-width:100%; border-radius:8px; margin-top:10px; display:none; }
+  button { width:100%; margin-top:22px; padding:15px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:17px; font-weight:700; }
+  button:disabled { opacity: .5; }
+  .msg { margin-top:16px; padding:12px; border-radius:10px; display:none; }
+  .ok { background:#e8f5ec; } .err { background:#fdecea; }
+  small { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Report a flood</h1>
+  <p class="sub">BAHAGI · Brgy. Bahagi. Your photo helps Meralco cut power only where the water is.</p>
+
+  <form id="f">
+    <label>1 · Photo of the street</label>
+    <div class="photo">
+      <input type="file" name="photo" accept="image/*" capture="environment" id="photo">
+      <img id="preview" alt="Your photo">
+    </div>
+
+    <label for="street">2 · Which street?</label>
+    <select name="street" id="street" required>
+      <option value="Estero St.">Estero St.</option>
+      <option value="Mabini St.">Mabini St.</option>
+      <option value="Rizal St.">Rizal St.</option>
+    </select>
+
+    <label>3 · How deep is the water? <small>(your best guess)</small></label>
+    <div class="levels">
+      <label><input type="radio" name="level" value="gutter"><span>Gutter</span></label>
+      <label><input type="radio" name="level" value="knee" checked><span>Knee</span></label>
+      <label><input type="radio" name="level" value="waist"><span>Waist</span></label>
+      <label><input type="radio" name="level" value="chest"><span>Chest</span></label>
+      <label><input type="radio" name="level" value="normal"><span>None</span></label>
+    </div>
+
+    <label for="sender">4 · Your mobile number <small>(optional, so we don't count you twice)</small></label>
+    <input type="text" name="sender" id="sender" inputmode="tel" placeholder="09xx xxx xxxx">
+
+    <input type="hidden" name="channel" value="Web">
+    <input type="hidden" name="lat" id="lat"><input type="hidden" name="lon" id="lon">
+    <button id="send" type="submit">Send report</button>
+  </form>
+  <div class="msg" id="msg"></div>
+</main>
+<script>
+  const photo = document.getElementById('photo'), preview = document.getElementById('preview');
+  photo.addEventListener('change', () => {
+    const f = photo.files[0];
+    if (f) { preview.src = URL.createObjectURL(f); preview.style.display = 'block'; }
+  });
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(p => {
+      document.getElementById('lat').value = p.coords.latitude;
+      document.getElementById('lon').value = p.coords.longitude;
+    }, () => {}, { timeout: 4000 });
+  }
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('send'), msg = document.getElementById('msg');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    const fd = new FormData(e.target);
+    if (!fd.get('lat')) { fd.delete('lat'); fd.delete('lon'); }
+    if (!fd.get('sender')) fd.delete('sender');
+    try {
+      const r = await fetch('/reports', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || 'Error');
+      msg.className = 'msg ok';
+      msg.textContent = j.duplicate
+        ? 'Thanks! We already have this report.'
+        : (j.flags && j.flags.length)
+          ? `Received, but we can't use it yet: ${j.flags.join('; ')}. Please send a fresh photo taken on the street now.`
+          : `Salamat! Received: ${j.street}, ${j.level} (${Math.round(j.confidence * 100)}% sure). A Meralco dispatcher will review it.`;
+    } catch (err) {
+      msg.className = 'msg err'; msg.textContent = 'Could not send: ' + err.message;
+    }
+    msg.style.display = 'block'; btn.disabled = false; btn.textContent = 'Send report';
+  });
+</script>
+</body>
+</html>

@@ -25,8 +25,6 @@ export interface Report {
   barangayId: string
   streetId?: string
   source: 'messenger' | 'viber' | 'sms' | 'web'
-  /** Object path inside the Supabase Storage bucket, e.g. "reports/2026/11/-Nx3abc.jpg". The dashboard turns it into photoUrl. */
-  photoPath?: string
   photoUrl?: string
   note: string
   estimatedCm: number

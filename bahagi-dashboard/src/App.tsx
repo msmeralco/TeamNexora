@@ -5,15 +5,15 @@ import MapView from './components/MapView'
 import ReportsView from './components/ReportsView'
 import Sidebar, { type View } from './components/Sidebar'
 import { config } from './config'
+import { api } from './lib/api'
 import { levelFromCm, LEVEL_STYLE } from './lib/level'
 import { connectRealtime, type LinkStatus } from './lib/realtime'
-import { sync } from './lib/sync'
 import { scopeLabel, streetsIn } from './lib/tree'
 import type { AlertFeed, Recommendation, Region, Report, Scope, SensorReading } from './types'
 
 const LINK_TEXT: Record<LinkStatus, string> = {
   connecting: 'Connecting to sensors…',
-  live: config.sensorSource === 'firebase' ? 'Live from Firebase' : config.sensorSource === 'poll' ? 'Live from the pole box' : 'Live from AWS IoT Core',
+  live: config.sensorSource === 'poll' ? 'Live from the pole box' : 'Live from AWS IoT Core',
   mock: 'Simulated sensors',
   offline: 'Sensor link offline',
 }
@@ -29,28 +29,19 @@ export default function App() {
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  // streetId → timestamp the street was cut, from /power in Firebase (written by the backend bridge after the switch moves)
+  // streetId → timestamp the street was cut. Seeded from the backend (street.powerOff), updated on approve/restore.
   const [outages, setOutages] = useState<Record<string, number>>({})
-  // live alerts: pole-box errors, floods, approvals waiting, recent events
+  // live alerts from the backend: pole-box errors, floods, approvals waiting, recent events
   const [feed, setFeed] = useState<AlertFeed | null>(null)
   const [reachable, setReachable] = useState(true)
-  const [workerSeen, setWorkerSeen] = useState<number | null>(null)
 
-  // Everything on screen is a live subscription: any change in Firebase (a new Messenger report, another
-  // dispatcher approving, the bridge cutting power, a pole-box alert) shows on every open dashboard at once.
   useEffect(() => {
-    const fail = (what: string) => (e: Error) =>
-      setError(`Could not load ${what} from Firebase (${e.message}). Check the VITE_FIREBASE_* settings or set VITE_USE_MOCK=true.`)
-    const subs = [
-      sync.regions(setRegions, fail('the street map')),
-      sync.reports(setReports, fail('reports')),
-      sync.recommendations(setRecs, fail('recommendations')),
-      sync.power(setOutages, fail('power state')),
-      sync.alerts(setFeed, fail('alerts')),
-      sync.connection(setReachable),
-      sync.worker(setWorkerSeen),
-    ]
-    return () => subs.forEach((off) => off())
+    Promise.all([api.regions(), api.reports(), api.recommendations()])
+      .then(([a, b, c]) => {
+        setRegions(a); setReports(b); setRecs(c)
+        setOutages(Object.fromEntries(streetsIn(a, { type: 'all' }).filter((s) => s.powerOff).map((s) => [s.id, Date.now()])))
+      })
+      .catch((e: Error) => setError(`Could not load data from the backend (${e.message}). Check VITE_API_BASE or set VITE_USE_MOCK=true.`))
   }, [])
 
   const poleIds = useMemo(() => streetsIn(regions, { type: 'all' }).flatMap((s) => s.poles.map((p) => p.id)), [regions])
@@ -59,6 +50,31 @@ export default function App() {
     if (!poleIds.length) return
     return connectRealtime(poleIds, (r) => setReadings((prev) => ({ ...prev, [r.poleId]: r })), setLink)
   }, [poleIds])
+
+  // Live mode: reports (web page + Messenger bot), recommendations and power state come from the backend.
+  // Power state is re-read too, so a cut or restore done with the button on the pole box shows here as well.
+  useEffect(() => {
+    if (config.useMock) return
+    const t = setInterval(() => {
+      Promise.all([api.reports(), api.recommendations(), api.regions()])
+        .then(([b, c, a]) => {
+          setReports(b); setRecs(c)
+          const off = streetsIn(a, { type: 'all' }).filter((s) => s.powerOff).map((s) => s.id)
+          setOutages((o) => Object.fromEntries(off.map((id) => [id, o[id] ?? Date.now()])))
+        })
+        .catch(() => {})
+    }, 3000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Alerts: every 2 s. If the backend stops answering, that is itself the first alert.
+  useEffect(() => {
+    if (config.useMock) return
+    const tick = () => api.alerts().then((f) => { setFeed(f); setReachable(true) }).catch(() => setReachable(false))
+    tick()
+    const t = setInterval(tick, config.pollMs)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     if (!notice) return
@@ -81,34 +97,31 @@ export default function App() {
   const live = scopedPoles.filter((p) => readings[p.id] && now - readings[p.id].ts < config.offlineAfterMs)
   const peak = Math.max(0, ...live.map((p) => readings[p.id].levelCm))
   const pendingAll = recs.filter((r) => r.status === 'pending' && (!config.useMock || reported.has(r.streetId))).length
-  const workerOnline = workerSeen != null && now - workerSeen < config.workerStaleMs
-  const alertCount = (feed?.active.filter((a) => a.severity !== 'info').length ?? 0) + (reachable && !workerOnline ? 1 : 0)
+  const alertCount = feed?.active.filter((a) => a.severity !== 'info').length ?? 0
 
-  // Recommendation status, power state and the report list are NOT changed here: the database does that and the
-  // subscriptions above repaint every dashboard, so two dispatchers never see different states.
   const decide = async (id: string, d: 'approve' | 'reject') => {
     const rec = recs.find((r) => r.id === id)
-    if (!rec) return
     try {
-      const sms = await sync.decide(rec, d)
-      if (d === 'reject') return
-      if (sms.pending)
-        setNotice(`Approved ${rec.switchId}. Waiting for the BAHAGI backend to move the switch and send the SMS; the map updates by itself when it does.`)
-      else if (rec.action === 'open')
+      const sms = await api.decide(id, d)
+      setRecs((rs) => rs.map((r) => (r.id === id ? { ...r, status: d === 'approve' ? 'approved' : 'rejected' } : r)))
+      if (rec && d === 'approve' && rec.action === 'open') {
+        // the reports that justified the cut are handled: clear them from the list
+        setReports((rs) => rs.filter((r) => r.streetId !== rec.streetId))
         setNotice(`Approved ${rec.switchId}. Power-cut warning SMS sent to ${sms.smsSent} residents. Reports for this street were cleared.`)
-      else setNotice(`Approved ${rec.switchId}. Power is back on; SMS sent to ${sms.smsSent} residents.`)
-      if (sms.smsFailed) setError(`${sms.smsFailed} SMS failed to send. The switch did move; check the SMS provider.`)
-    } catch (e) { setError(`Could not ${d} the recommendation: ${(e as Error).message}. Nothing was switched.`) }
+      }
+      if (rec && d === 'approve')
+        setOutages((o) => { const n = { ...o }; if (rec.action === 'open') n[rec.streetId] = Date.now(); else delete n[rec.streetId]; return n })
+    } catch (e) { setError(`Could not ${d} the recommendation (${(e as Error).message}). Nothing was switched.`) }
   }
 
   const restore = async (streetId: string) => {
-    const name = streetsIn(regions, { type: 'all' }).find((s) => s.id === streetId)?.name ?? 'the street'
     try {
-      const sms = await sync.restore(streetId)
-      if (sms.pending) setNotice(`Restore requested for ${name}. Waiting for the BAHAGI backend to close the switch; the map updates by itself when it does.`)
-      else setNotice(`Power restored on ${name}. "Power restored" SMS sent to ${sms.smsSent} residents.`)
+      const sms = await api.restore(streetId)
+      const name = streetsIn(regions, { type: 'all' }).find((s) => s.id === streetId)?.name ?? 'the street'
+      setNotice(`Power restored on ${name}. "Power restored" SMS sent to ${sms.smsSent} residents.`)
       if (sms.smsFailed) setError(`${sms.smsFailed} "power restored" SMS failed to send. Power is restored; check the SMS provider.`)
-    } catch (e) { setError(`Could not restore power: ${(e as Error).message}. The street is still marked off.`) }
+      setOutages((o) => { const n = { ...o }; delete n[streetId]; return n })
+    } catch (e) { setError(`Could not restore power (${(e as Error).message}). The street is still marked off.`) }
   }
   const outCount = scoped.filter((s) => outages[s.id]).length
 
@@ -144,7 +157,7 @@ export default function App() {
           </div>
         </header>
 
-        {!config.useMock && <AlertsPanel feed={feed} reachable={reachable} workerSeen={workerSeen} workerOnline={workerOnline} />}
+        {!config.useMock && <AlertsPanel feed={feed} reachable={reachable} />}
         {notice && <div role="status" className="border-l-4 border-meralco bg-ink px-6 py-2 text-sm font-semibold text-white">{notice}</div>}
         {error && <div role="alert" className="bg-red-600 px-6 py-2 text-sm font-semibold text-white">{error}</div>}
 

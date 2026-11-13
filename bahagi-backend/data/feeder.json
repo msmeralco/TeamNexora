@@ -1,0 +1,46 @@
+{
+  "_note": "Grid twin of the demo barangay. Meralco's switching hierarchy: substation > feeder > distribution TRANSFORMER > meter. The smallest thing Meralco can switch off is a transformer (all homes on it), or a single home if it has a SMART (AMI) meter, which can be disconnected remotely. Traditional meters cannot. Each transformer here is one relay in the box (S1-S3). elev = ground elevation in metres; homes on the same street can sit at different heights. Replace with real GIS / AMI data for a pilot.",
+  "substation": { "id": "SS-BAHAGI", "name": "Brgy. Bahagi substation", "lat": 14.6434, "lon": 121.0912 },
+  "feeder": { "id": "F1", "name": "Brgy. Bahagi feeder" },
+  "transformers": [
+    {
+      "switch": "S1", "transformer": "TR-1", "street": "Estero St.", "relay": 1,
+      "poles": [
+        { "id": "P1",  "lat": 14.6416, "lon": 121.0962, "elev": 2.00, "sensor": true },
+        { "id": "P1b", "lat": 14.6404, "lon": 121.0955, "elev": 2.05 }
+      ],
+      "homes": [
+        { "id": "E1", "lat": 14.6414, "lon": 121.0960, "elev": 2.05, "meter": "traditional" },
+        { "id": "E2", "lat": 14.6409, "lon": 121.0957, "elev": 2.10, "meter": "smart" },
+        { "id": "E3", "lat": 14.6406, "lon": 121.0956, "elev": 2.70, "meter": "traditional", "note": "raised house" },
+        { "id": "E4", "lat": 14.6402, "lon": 121.0953, "elev": 2.15, "meter": "traditional" }
+      ]
+    },
+    {
+      "switch": "S2", "transformer": "TR-2", "street": "Mabini St.", "relay": 2,
+      "poles": [
+        { "id": "P2",  "lat": 14.6420, "lon": 121.0943, "elev": 2.40 },
+        { "id": "P2b", "lat": 14.6405, "lon": 121.0943, "elev": 2.45 }
+      ],
+      "homes": [
+        { "id": "M1", "lat": 14.6411, "lon": 121.0953, "elev": 2.20, "meter": "smart", "relay": 4, "note": "corner lot by Estero, low; its smart meter is relay K4 in the model" },
+        { "id": "M2", "lat": 14.6418, "lon": 121.0945, "elev": 2.45, "meter": "smart" },
+        { "id": "M3", "lat": 14.6412, "lon": 121.0943, "elev": 2.50, "meter": "traditional" },
+        { "id": "M4", "lat": 14.6407, "lon": 121.0942, "elev": 2.55, "meter": "traditional" }
+      ]
+    },
+    {
+      "switch": "S3", "transformer": "TR-3", "street": "Rizal St.", "relay": 3,
+      "poles": [
+        { "id": "P3",  "lat": 14.6420, "lon": 121.0931, "elev": 3.10 },
+        { "id": "P3b", "lat": 14.6405, "lon": 121.0931, "elev": 3.15 }
+      ],
+      "homes": [
+        { "id": "R1", "lat": 14.6418, "lon": 121.0933, "elev": 3.10, "meter": "traditional" },
+        { "id": "R2", "lat": 14.6413, "lon": 121.0931, "elev": 3.15, "meter": "smart" },
+        { "id": "R3", "lat": 14.6409, "lon": 121.0930, "elev": 3.20, "meter": "traditional" },
+        { "id": "R4", "lat": 14.6406, "lon": 121.0932, "elev": 3.25, "meter": "traditional" }
+      ]
+    }
+  ]
+}

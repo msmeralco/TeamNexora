@@ -1,13 +1,11 @@
 import { config } from '../config'
 import type { SensorReading } from '../types'
 import { api } from './api'
-import { sync } from './sync'
 
 export type LinkStatus = 'connecting' | 'live' | 'mock' | 'offline'
 
 /**
- * Pole box (ESP32 + HC-SR04) → Firebase /sensors/{pole} → browser (VITE_SENSOR_SOURCE=firebase, default)
- * or pole box → BAHAGI backend → GET /api/sensors every 2 s  (VITE_SENSOR_SOURCE=poll)
+ * Pole box (ESP32 + HC-SR04) → BAHAGI backend → GET /api/sensors every 2 s  (VITE_SENSOR_SOURCE=poll, default)
  * or ESP32 → AWS IoT Core (MQTT) → browser over WebSocket                    (VITE_SENSOR_SOURCE=mqtt)
  * ESP32 payload: {"pole":"P1","level_cm":5.1}  (or {"pole":"P1","distance_cm":14.9} → level = sensorHeight − distance)
  * Returns a disconnect function.
@@ -30,23 +28,6 @@ export function connectRealtime(
     tick()
     const t = setInterval(tick, 2000)
     return () => clearInterval(t)
-  }
-
-  if (config.sensorSource === 'firebase') {
-    // Pole box writes /sensors/{pole} in Firebase; every dashboard gets each new reading pushed to it
-    onStatus('connecting')
-    let last: { online: boolean; ts: number }[] = []
-    const judge = () => {
-      const fresh = last.some((r) => r.online && Date.now() - r.ts < config.offlineAfterMs)
-      onStatus(fresh ? 'live' : last.length ? 'offline' : 'connecting')
-    }
-    const off = sync.sensors((rows) => {
-      last = rows
-      rows.forEach((r) => onReading({ poleId: r.poleId, levelCm: r.levelCm, ts: r.ts }))
-      judge()
-    }, () => onStatus('offline'))
-    const t = setInterval(judge, 5000) // the box going quiet fires no event, so re-check
-    return () => { off(); clearInterval(t) }
   }
 
   if (config.sensorSource === 'poll') {
